@@ -1,78 +1,55 @@
-import bcrypt from 'bcrypt';
-import generateToken from '../../utils/generateToken';
-import { TUser } from './auth.interface';
-import { User } from './auth.model';
-import AppError from '../../errors/AppError';
+// import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import httpStatus from 'http-status';
+import AppError from '../../errors/AppError';
+import { User } from '../user/user.model';
+import { TLoginUser } from './auth.interface';
+import config from '../../config';
 
-const createUserIntoDB = async (res: any, user: TUser) => {
-  const { email, password } = user;
+const loginUser = async (payload: TLoginUser) => {
+  // checking if the is exists
 
-  // Check if the user already exists
-  const existingUser = await User.findOne({ email });
-  if (existingUser) {
-    throw new Error('User with this email number already exists');
+  const user = await User.isUserExistsByCustomId(payload.id);
+
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, 'This user is not found!');
   }
 
-  // Hash the password
-  const hashedPassword = await bcrypt.hash(password, 10);
+  // // checking if the is already delete
+  const isDeleted = user?.isDeleted;
+  if (isDeleted) {
+    throw new AppError(httpStatus.FORBIDDEN, 'This user is deleted');
+  }
 
-  // Create a new user
-  const newUser = new User({
-    ...user,
-    password: hashedPassword,
+  // // checking if the is blocked
+  const userStatus = user?.status;
+  if (userStatus === 'blocked') {
+    throw new AppError(httpStatus.FORBIDDEN, 'This user is blocked');
+  }
+
+  // console.log(await User.isPasswordMatched(payload?.password, user?.password));
+
+  // checking if the password is correct.
+  if (!(await User.isPasswordMatched(payload?.password, user?.password))) {
+    // Access granted: Send AccessToke and Granted Token.
+    throw new AppError(httpStatus.FORBIDDEN, "Don't matched the password!");
+  }
+
+  const jwtPayload = {
+    userId: user.id,
+    role: user.role,
+  };
+
+  const AccessToke = jwt.sign(jwtPayload, config.jwt_access_secret as string, {
+    expiresIn: '10d',
   });
 
-  const signUpUser = await newUser.save();
-
-  if (signUpUser) {
-    // Generate JWT token
-    generateToken(res, signUpUser._id.toString());
-
-    // Return the essential data (exclude password)
-    const responseData = {
-      _id: signUpUser._id,
-      name: signUpUser.name,
-      phone: signUpUser.phone,
-      profilePicture: signUpUser.profilePicture,
-    };
-
-    return responseData;
-  }
-
-  throw new AppError(httpStatus.UNAUTHORIZED, 'User creation failed');
+  return {
+    AccessToke,
+    needsPasswordChange: user.needsPasswordChange,
+  };
 };
 
-const loginUserIntoDB = async (user: TUser) => {
-  const { email, password } = user;
-
-  const isExistsUser = await User.findOne({ email });
-
-  if (isExistsUser && (await bcrypt.compare(password, isExistsUser.password))) {
-    return {
-      _id: isExistsUser._id,
-      name: isExistsUser.name,
-      phone: isExistsUser.phone,
-      profilePicture: isExistsUser.profilePicture,
-    };
-  }
-
-  throw new AppError(httpStatus.UNAUTHORIZED, 'Login failed!');
-};
-
-const getAllUsersFromDB = async () => {
-  const result = await User.find();
-  return result;
-};
-
-const getSingleUserFromDB = async (id: string) => {
-  const result = await User.findOne({ id });
-  return result;
-};
-
-export const UserServices = {
-  createUserIntoDB,
-  loginUserIntoDB,
-  getAllUsersFromDB,
-  getSingleUserFromDB,
+export const AuthServices = {
+  loginUser,
 };
