@@ -1,21 +1,17 @@
-/* eslint-disable no-console */
-import mongoose from 'mongoose';
 import app from './app';
+import mongoose from 'mongoose';
 import config from './app/config';
-import colors from 'colors/safe';
+import colors from 'colors';
 
 async function main() {
   try {
-    await mongoose.connect(config.database_url as string).then(() => {
-      console.log(
-        colors.bold(colors.green(`Database connection is successful 🛢`)),
-      );
+    // database connection
+    mongoose.connect(config.database_url as string).then(() => {
+      console.log(colors.green.bold('Database connection was successful! 🛢'));
     });
 
     app.listen(config.port, () => {
-      console.log(
-        colors.bold(colors.yellow(`App is listening on port ${config.port}`)),
-      );
+      console.log(colors.yellow.bold(`App is running on port ${config.port}`));
     });
   } catch (err) {
     console.log(err);

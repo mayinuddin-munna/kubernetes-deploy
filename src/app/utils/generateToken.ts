@@ -2,8 +2,9 @@ import jwt from 'jsonwebtoken';
 import { Response } from 'express';
 import config from '../config';
 
+// Token generator
 const generateToken = (res: Response, userId: string) => {
-  const token = jwt.sign({ userId }, config.jwt_access_secret as string, {
+  const token = jwt.sign({ userId }, config.jwt_secret as string, {
     expiresIn: '30d',
   });
 

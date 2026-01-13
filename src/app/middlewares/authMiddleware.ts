@@ -1,12 +1,10 @@
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import config from '../config';
-import Users from '../modules/user/user.model';
-import AppError from '../errors/AppError';
-import httpStatus from 'http-status';
+import { User } from '../modules/auth/auth.model';
 
 interface JwtPayload {
-  id: string;
+  userId: string;
 }
 
 export const protect = async (
@@ -16,46 +14,23 @@ export const protect = async (
 ) => {
   let token: string | undefined;
 
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
-    token = req.headers.authorization.split(' ')[1];
-  } else if (req.cookies.jwt) {
+  if (req.cookies.jwt) {
     token = req.cookies.jwt;
   }
 
   if (!token) {
-    return next(
-      new AppError(httpStatus.UNAUTHORIZED, 'Not authorized, no token'),
-    );
+    return res.status(401).json({ message: 'Not authorized, no token' });
   }
 
   try {
     const decoded = jwt.verify(
       token,
-      config.jwt_access_secret as string,
-    ) as JwtPayload;
+      config.jwt_secret as string,
+    ) as unknown as JwtPayload;
+    req.user = await User.findById(decoded.userId).select('-password');
 
-    const user = await Users.findById(decoded.id).select('-password');
-
-    if (!user) {
-      return next(new AppError(httpStatus.UNAUTHORIZED, 'User not found'));
-    }
-
-    req.user = user;
     next();
   } catch (error) {
-    return next(
-      new AppError(httpStatus.UNAUTHORIZED, 'Not authorized, token failed'),
-    );
-  }
-};
-
-export const admin = (req: Request, res: Response, next: NextFunction) => {
-  if (req.user && req.user.isAdmin) {
-    next();
-  } else {
-    next(new AppError(httpStatus.FORBIDDEN, 'Not authorized as an admin'));
+    return res.status(401).json({ message: 'Not authorized, token failed' });
   }
 };
